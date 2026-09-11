@@ -115,6 +115,7 @@ internal static class ToolkitBridge
     private static PropertyInfo? eventCurrent, eventTypeProp, eventKeyCodeProp, eventMouseProp, eventButtonProp, timeScaleProp;
     private static MethodInfo? eventUseMethod;
     private static PropertyInfo? guiColorProp, guiBackgroundColorProp, guiContentColorProp, guiSkinProp, whiteTextureProp, cursorVisibleProp;
+    private static bool wasCursorHidden;
     private static bool skinStyled;
     private static bool dumpedUnitShape;
     private static readonly HashSet<string> dumpedProviders = new();
@@ -569,7 +570,14 @@ internal static class ToolkitBridge
             }
 
 
-            if (!menuOpen) return;
+            if (!menuOpen)
+            {
+                if (wasCursorHidden)
+                {
+                    try { cursorVisibleProp?.SetValue(null, true); wasCursorHidden = false; } catch {}
+                }
+                return;
+            }
 
             DiscoverRuntimeObjects(false);
             HandleWindowDragAndResize();
@@ -1834,9 +1842,15 @@ internal static class ToolkitBridge
         var mp=eventMouseProp?.GetValue(ev); if(mp==null) return;
         float mx=Convert.ToSingle(GetMember(mp,"x") ?? -1f);
         float my=Convert.ToSingle(GetMember(mp,"y") ?? -1f);
-        if(mx>=windowX && mx<=windowX+windowW && my>=windowY && my<=windowY+windowH)
+        bool isHovering = (mx>=windowX && mx<=windowX+windowW && my>=windowY && my<=windowY+windowH);
+        
+        if(isHovering)
         {
-            try { cursorVisibleProp?.SetValue(null, false); } catch {}
+            try { cursorVisibleProp?.SetValue(null, false); wasCursorHidden = true; } catch {}
+        }
+        else if (wasCursorHidden)
+        {
+            try { cursorVisibleProp?.SetValue(null, true); wasCursorHidden = false; } catch {}
         }
     }
 
