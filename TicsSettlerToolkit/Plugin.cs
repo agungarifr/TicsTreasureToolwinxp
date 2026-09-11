@@ -1846,7 +1846,7 @@ internal static class ToolkitBridge
         
         if(isHovering)
         {
-            try { cursorVisibleProp?.SetValue(null, false); wasCursorHidden = true; } catch {}
+            try { /* cursorVisibleProp?.SetValue(null, false); */ wasCursorHidden = true; } catch {}
         }
         else if (wasCursorHidden)
         {
