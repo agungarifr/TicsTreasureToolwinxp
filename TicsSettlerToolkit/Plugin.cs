@@ -2,9 +2,12 @@ using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
+using System;
 using System.Collections;
 using System.Reflection;
 using System.Text.Json;
+using Il2CppInterop.Runtime.Injection;
+using UnityEngine;
 
 namespace TicsSettlerToolkit;
 
@@ -21,7 +24,21 @@ public sealed class Plugin : BasePlugin
         ToolkitBridge.Harmony = new Harmony(Guid);
         ToolkitBridge.LoadLearnedTraitCatalog();
         ToolkitBridge.InstallHooks();
+        
+        ClassInjector.RegisterTypeInIl2Cpp<ToolkitBehaviour>();
+        this.AddComponent<ToolkitBehaviour>();
+        
         Log.LogInfo("Tic's Settler Toolkit loaded. Press F8 in-game.");
+    }
+}
+
+public class ToolkitBehaviour : MonoBehaviour
+{
+    public ToolkitBehaviour(IntPtr ptr) : base(ptr) { }
+
+    private void OnGUI()
+    {
+        ToolkitBridge.OnGUI();
     }
 }
 
@@ -168,12 +185,6 @@ internal static class ToolkitBridge
 
                 foreach (var m in t.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                 {
-                    if (m.Name == "OnGUI" && m.GetParameters().Length == 0)
-                    {
-                        Harmony!.Patch(m, postfix: new HarmonyMethod(typeof(ToolkitBridge).GetMethod(nameof(OnGuiPostfix), BindingFlags.Static | BindingFlags.NonPublic)!));
-                        patched++;
-                    }
-
                     if ((m.Name == "get_ClanGold" || m.Name == "AddClanGold" || m.Name == "set_ClanGold") && !m.IsStatic)
                     {
                         Harmony!.Patch(m, postfix: new HarmonyMethod(typeof(ToolkitBridge).GetMethod(nameof(CaptureClan), BindingFlags.Static | BindingFlags.NonPublic)!));
@@ -207,7 +218,7 @@ internal static class ToolkitBridge
 
         InstallInputBlockHooks();
         DumpComponentApis();
-        Log?.LogInfo($"Installed Treasure Tool hooks. OnGUI hooks: {patched}; TraitSheet owner hooks: {traitSheetOwnerHooks}");
+        Log?.LogInfo($"Installed Treasure Tool hooks. TraitSheet owner hooks: {traitSheetOwnerHooks}");
     }
 
     private static void PatchCaptureMethods(Type t, string postfixName)
@@ -542,7 +553,7 @@ internal static class ToolkitBridge
         if (!inventories.Contains(__instance)) inventories.Add(__instance);
     }
 
-    private static void OnGuiPostfix()
+    public static void OnGUI()
     {
         try
         {
@@ -667,20 +678,32 @@ internal static class ToolkitBridge
         float x = windowX, y = windowY;
 
         // Dungeon Settlers-inspired slate panels with restrained brass trim.
-        FillRect(x,y,w,h,0.018f,0.022f,0.025f,0.985f);
-        FillRect(x+3,y+3,w-6,h-6,0.11f,0.12f,0.115f,0.99f);
-        FillRect(x+6,y+6,w-12,h-12,0.035f,0.043f,0.045f,0.995f);
-        SetBackground(0.10f,0.09f,0.07f);
+        // Windows XP Classic Window Background
+        FillRect(x,y,w,h,0.83f,0.81f,0.78f,1f); // Base Classic Gray
+        
+        // Classic 3D Light Borders (Top/Left)
+        FillRect(x,y,w-1,1,1f,1f,1f,1f);
+        FillRect(x,y,1,h-1,1f,1f,1f,1f);
+        FillRect(x+1,y+1,w-3,1,0.89f,0.89f,0.89f,1f);
+        FillRect(x+1,y+1,1,h-3,0.89f,0.89f,0.89f,1f);
+        
+        // Classic 3D Dark Borders (Bottom/Right)
+        FillRect(x,y+h-1,w,1,0f,0f,0f,1f);
+        FillRect(x+w-1,y,1,h,0f,0f,0f,1f);
+        FillRect(x+1,y+h-2,w-2,1,0.5f,0.5f,0.5f,1f);
+        FillRect(x+w-2,y+1,1,h-2,0.5f,0.5f,0.5f,1f);
+
+        SetBackground(0.83f,0.81f,0.78f);
         Box(x,y,w,h,"");
 
-        FillRect(x+10,y+10,w-20,70,0.085f,0.075f,0.055f,1f);
-        FillRect(x+10,y+76,w-20,2,0.55f,0.42f,0.22f,1f);
-        Label(x+30,y+19,560,30,"TIC'S TREASURE TOOL");
-        Label(x+31,y+49,560,20,"Settler editing, traits, inventory & world utilities");
-        Label(x+w-250,y+51,185,20,$"{playerUnits.Count} SETTLER{(playerUnits.Count==1 ? "" : "S")} READY");
+        // Title Bar (Dark Blue Classic)
+        FillRect(x+3,y+3,w-6,24,0f,0f,0.6f,1f);
+        Label(x+8,y+6,560,30,"TIC'S TREASURE TOOL V2");
+        Label(x+31,y+45,560,20,"Settler editing, traits, inventory & world utilities");
+        Label(x+w-250,y+45,185,20,$"{playerUnits.Count} SETTLER{(playerUnits.Count==1 ? "" : "S")} READY");
 
-        SetBackground(0.22f,0.12f,0.07f);
-        if(Button(x+w-52,y+22,28,27,"X")) menuOpen=false;
+        SetBackground(0.7f,0.1f,0.1f);
+        if(Button(x+w-30,y+5,22,20,"X")) menuOpen=false;
 
         float tx=x+18;
         float tabW=Math.Max(145f,(w-36f-(tabs.Length-1)*6f)/tabs.Length);
@@ -688,11 +711,11 @@ internal static class ToolkitBridge
         {
             if(i==tab)
             {
-                FillRect(tx,y+91,tabW,38,0.22f,0.20f,0.14f,1f);
-                FillRect(tx,y+127,tabW,2,0.64f,0.48f,0.24f,1f);
-                SetBackground(0.25f,0.20f,0.12f);
+                FillRect(tx,y+85,tabW,32,0.9f,0.9f,0.9f,1f);
+                FillRect(tx,y+115,tabW,2,0.4f,0.4f,0.4f,1f);
+                SetBackground(0.9f,0.9f,0.9f);
             }
-            else SetBackground(0.09f,0.085f,0.07f);
+            else SetBackground(0.75f,0.73f,0.70f);
 
             if(Button(tx,y+91,tabW,38,tabs[i])) { tab=i; traitPickerKind=""; }
             tx+=tabW+6;
@@ -711,13 +734,19 @@ internal static class ToolkitBridge
             case 3: DrawGame(x,y); break;
         }
 
-        FillRect(x+18,y+h-38,w-36,26,0.065f,0.060f,0.048f,1f);
+        FillRect(x+18,y+h-38,w-36,26,0.75f,0.73f,0.70f,1f);
+        FillRect(x+18,y+h-38,w-36,1,0.5f,0.5f,0.5f,1f); // Inset border
+        FillRect(x+18,y+h-13,w-36,1,1f,1f,1f,1f);
         Label(x+30,y+h-34,440,20,"F8 CLOSE  •  DRAG HEADER  •  RESIZE FROM LOWER-RIGHT");
         Label(x+w-305,y+h-34,260,20,playerUnits.Count>0 ? "TOOLKIT ACTIVE" : "WAITING FOR GAME");
 
-        FillRect(x+w-25,y+h-23,13,2,0.68f,0.50f,0.25f,1f);
-        FillRect(x+w-20,y+h-18,8,2,0.68f,0.50f,0.25f,1f);
-        FillRect(x+w-15,y+h-13,3,2,0.68f,0.50f,0.25f,1f);
+        // Classic resize grip
+        FillRect(x+w-25,y+h-23,13,2,0.5f,0.5f,0.5f,1f);
+        FillRect(x+w-25,y+h-22,13,1,1f,1f,1f,1f);
+        FillRect(x+w-20,y+h-18,8,2,0.5f,0.5f,0.5f,1f);
+        FillRect(x+w-20,y+h-17,8,1,1f,1f,1f,1f);
+        FillRect(x+w-15,y+h-13,3,2,0.5f,0.5f,0.5f,1f);
+        FillRect(x+w-15,y+h-12,3,1,1f,1f,1f,1f);
 
         ApplyPalette();
     }
@@ -728,23 +757,28 @@ internal static class ToolkitBridge
         SectionTitle(x+36,y+158,Math.Max(620f,windowW-72f),"SELECT SETTLER");
         Label(x+52,y+197,90,24,"Settler");
 
-        SetBackground(0.18f,0.15f,0.10f);
+        SetBackground(0.83f,0.81f,0.78f);
         if(Button(x+146,y+191,38,32,"‹"))
         {
             selectedCharacter=(selectedCharacter-1+count)%count;
             OnSelectedCharacterChanged();
         }
 
-        FillRect(x+194,y+190,310,34,0.045f,0.052f,0.052f,1f);
+        // TextBox inset
+        FillRect(x+194,y+190,310,34,1f,1f,1f,1f);
+        FillRect(x+194,y+190,310,1,0.5f,0.5f,0.5f,1f);
+        FillRect(x+194,y+190,1,34,0.5f,0.5f,0.5f,1f);
         Label(x+211,y+197,280,24,GetCharacterName(selectedCharacter));
 
-        SetBackground(0.18f,0.15f,0.10f);
+        SetBackground(0.83f,0.81f,0.78f);
         if(Button(x+514,y+191,38,32,"›"))
         {
             selectedCharacter=(selectedCharacter+1)%count;
             OnSelectedCharacterChanged();
         }
 
+        if(Button(x+562,y+191,96,32,"REFRESH"))
+            DiscoverRuntimeObjects(true);
         Label(x+570,y+197,250,24,$"{selectedCharacter+1} / {Math.Max(1,CharacterCount)}");
     }
 
@@ -826,14 +860,16 @@ internal static class ToolkitBridge
         float iy=y+307;
         foreach(var item in items.Skip(inventoryScroll).Take(visible))
         {
-            FillRect(x+50,iy-3,panelW-28,34,0.032f,0.038f,0.038f,1f);
+            // Classic white list item with subtle separator
+            FillRect(x+50,iy-3,panelW-28,34,1f,1f,1f,1f);
+            FillRect(x+50,iy-3,panelW-28,1,0.9f,0.9f,0.9f,1f);
             Label(x+62,iy+4,Math.Max(360f,panelW-360f),24,FriendlyItemName(item.Name));
 
             if(!inventoryEdits.TryGetValue(item.Name,out var txt)) txt=item.Amount.ToString();
             float qx=x+panelW-235;
             txt=TextField(qx,iy,88,29,txt);
             inventoryEdits[item.Name]=txt;
-            SetBackground(0.24f,0.18f,0.10f);
+            SetBackground(0.83f,0.81f,0.78f);
             if(Button(qx+98,iy,72,29,"SET") && int.TryParse(txt,out var n))
             {
                 SetInventoryAmount(item,n);
@@ -847,7 +883,7 @@ internal static class ToolkitBridge
         else if(items.Count>visible)
         {
             Label(x+panelW-48,y+281,36,22,$"{inventoryScroll+1}");
-            SetBackground(0.16f,0.14f,0.10f);
+            SetBackground(0.83f,0.81f,0.78f);
             if(Button(x+panelW-48,y+310,28,28,"▲")) inventoryScroll=Math.Max(0,inventoryScroll-1);
             if(Button(x+panelW-48,y+346,28,28,"▼")) inventoryScroll=Math.Min(maxOffset,inventoryScroll+1);
         }
@@ -892,7 +928,7 @@ internal static class ToolkitBridge
             Label(x+58,ay,165,28,name);
             text=TextField(x+225,ay-2,105,30,text);
             attributeEdits[name]=text;
-            SetBackground(0.31f,0.20f,0.09f);
+            SetBackground(0.83f,0.81f,0.78f);
             if(Button(x+344,ay-2,72,30,"SET") && float.TryParse(text,out var v))
             {
                 SetGeneratedStat(selectedCharacter,name,v);
@@ -929,7 +965,7 @@ internal static class ToolkitBridge
             DrawTraitRow(rightX+30,ty,rightW-60,"main",key,selectedCharacter);
             ty+=38;
         }
-        SetBackground(0.24f,0.16f,0.08f);
+        SetBackground(0.83f,0.81f,0.78f);
         if(mains.Count<4)
         {
             if(Button(rightX+30,ty,150,30,"+ ADD MAIN TRAIT"))
@@ -947,7 +983,7 @@ internal static class ToolkitBridge
             DrawTraitRow(rightX+30,ty,rightW-60,"sub",key,selectedCharacter);
             ty+=38;
         }
-        SetBackground(0.24f,0.16f,0.08f);
+        SetBackground(0.83f,0.81f,0.78f);
         if(subs.Count<4)
         {
             if(Button(rightX+30,ty,150,30,"+ ADD SUB TRAIT"))
@@ -966,22 +1002,27 @@ internal static class ToolkitBridge
     private static void DrawTraitRow(float x,float y,float w,string kind,string key,int character)
     {
         string friendly=FriendlyBuildKey(key);
-        SetBackground(0.16f,0.11f,0.07f);
-        if(Button(x,y,Math.Max(190f,w-170f),30,friendly))
+        bool pickerActive = !string.IsNullOrWhiteSpace(traitPickerKind);
+
+        SetBackground(0.9f,0.9f,0.9f);
+        if(pickerActive) Box(x,y,Math.Max(190f,w-170f),30,friendly);
+        else if(Button(x,y,Math.Max(190f,w-170f),30,friendly))
         {
             traitPickerKind=kind;
             traitPickerOldKey=key;
             traitPickerPage=0;
         }
-        SetBackground(0.31f,0.20f,0.09f);
-        if(Button(x+w-158,y,76,30,"REPLACE"))
+        SetBackground(0.83f,0.81f,0.78f);
+        if(pickerActive) Box(x+w-158,y,76,30,"REPLACE");
+        else if(Button(x+w-158,y,76,30,"REPLACE"))
         {
             traitPickerKind=kind;
             traitPickerOldKey=key;
             traitPickerPage=0;
         }
-        SetBackground(0.22f,0.10f,0.07f);
-        if(Button(x+w-76,y,72,30,"REMOVE"))
+        SetBackground(0.83f,0.81f,0.78f);
+        if(pickerActive) Box(x+w-76,y,72,30,"REMOVE");
+        else if(Button(x+w-76,y,72,30,"REMOVE"))
         {
             RemoveCharacterTrait(character,key);
             traitPickerKind="";
@@ -999,8 +1040,15 @@ internal static class ToolkitBridge
         traitPickerPage=Math.Max(0,Math.Min(traitPickerPage,maxOffset));
 
         float panelH=Math.Min(windowH-330,390f);
-        FillRect(x,y,w,panelH,0.035f,0.028f,0.022f,0.995f);
-        SetBackground(0.16f,0.11f,0.07f);
+        
+        // Classic window inset
+        FillRect(x,y,w,panelH,0.83f,0.81f,0.78f,1f);
+        FillRect(x,y,w-1,1,1f,1f,1f,1f);
+        FillRect(x,y,1,panelH-1,1f,1f,1f,1f);
+        FillRect(x,y+panelH-1,w,1,0.5f,0.5f,0.5f,1f);
+        FillRect(x+w-1,y,1,panelH,0.5f,0.5f,0.5f,1f);
+        
+        SetBackground(0.83f,0.81f,0.78f);
         Box(x,y,w,panelH,"");
         Label(x+16,y+12,w-100,24,traitPickerKind=="main" ? "SELECT MAIN TRAIT" : "SELECT SUB TRAIT");
         if(Button(x+w-42,y+8,30,28,"X")) { traitPickerKind=""; return; }
@@ -1709,9 +1757,12 @@ internal static class ToolkitBridge
 
     private static void SectionTitle(float x,float y,float w,string text)
     {
-        FillRect(x,y,w,34,0.075f,0.071f,0.055f,1f);
-        FillRect(x,y+32,w,2,0.58f,0.43f,0.21f,1f);
-        SetBackground(0.13f,0.115f,0.08f);
+        FillRect(x,y,w,34,0.75f,0.73f,0.70f,1f);
+        FillRect(x,y,w-1,1,0.5f,0.5f,0.5f,1f); // Top dark
+        FillRect(x,y,1,33,0.5f,0.5f,0.5f,1f); // Left dark
+        FillRect(x,y+33,w,1,1f,1f,1f,1f); // Bottom light
+        FillRect(x+w-1,y,1,34,1f,1f,1f,1f); // Right light
+        SetBackground(0.75f,0.73f,0.70f);
         Box(x,y,w,34,"");
         Label(x+14,y+7,w-28,24,text);
     }
@@ -1816,10 +1867,10 @@ internal static class ToolkitBridge
     {
         if(colorType==null) return;
         try {
-            object C(float r,float g,float b,float a=1f)=>Activator.CreateInstance(colorType,new object[]{r,g,b,a})!;
-            guiColorProp?.SetValue(null,C(1f,1f,1f,1f));
-            guiContentColorProp?.SetValue(null,C(0.91f,0.87f,0.73f,1f));
-            guiBackgroundColorProp?.SetValue(null,C(0.13f,0.115f,0.08f,1f));
+            object C(float r,float g,float b,float a=1f)=>Activator.CreateInstance(colorType!,new object[]{r,g,b,a})!;
+            guiColorProp?.SetValue(null,C(0f,0f,0f,1f)); // Classic text color
+            guiContentColorProp?.SetValue(null,C(0f,0f,0f,1f)); // Classic text color
+            guiBackgroundColorProp?.SetValue(null,C(0.83f,0.81f,0.78f,1f)); // Classic gray
         } catch {}
     }
 
@@ -2671,14 +2722,29 @@ internal static class ToolkitBridge
     private static IEnumerable<object> FindObjectsOfType(Type t)
     {
         var result=new List<object>();
-        if(resourcesType==null) return result;
 
         try
         {
-            var m=resourcesType.GetMethods(BindingFlags.Public|BindingFlags.Static)
-                .FirstOrDefault(x=>x.Name=="FindObjectsOfTypeAll" && x.GetParameters().Length==1 && x.GetParameters()[0].ParameterType==typeof(Type));
-            if(m?.Invoke(null,new object[]{t}) is IEnumerable e)
-                foreach(var x in e) if(x!=null) result.Add(x);
+            var objType = FindType("UnityEngine.Object");
+            if (objType != null)
+            {
+                var findMethod = objType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                    .FirstOrDefault(m => m.Name == "FindObjectsOfType" && m.GetParameters().Length == 1 && m.GetParameters()[0].ParameterType == typeof(Type));
+                
+                if (findMethod != null && findMethod.Invoke(null, new object[]{t}) is IEnumerable eObj)
+                {
+                    foreach(var x in eObj) if(x!=null) result.Add(x);
+                    if (result.Count > 0) return result;
+                }
+            }
+
+            if(resourcesType!=null) 
+            {
+                var m=resourcesType.GetMethods(BindingFlags.Public|BindingFlags.Static)
+                    .FirstOrDefault(x=>x.Name=="FindObjectsOfTypeAll" && x.GetParameters().Length==1 && x.GetParameters()[0].ParameterType==typeof(Type));
+                if(m?.Invoke(null,new object[]{t}) is IEnumerable e)
+                    foreach(var x in e) if(x!=null) result.Add(x);
+            }
         }
         catch{}
         return result;
