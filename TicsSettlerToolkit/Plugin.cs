@@ -110,11 +110,11 @@ internal static class ToolkitBridge
     private static string mainSpText = "";
     private static string subSpText = "";
 
-    private static Type? guiType, rectType, eventType, timeType, screenType, resourcesType, colorType, texture2DType, inputType;
+    private static Type? guiType, rectType, eventType, timeType, screenType, resourcesType, colorType, texture2DType, inputType, cursorType;
     private static MethodInfo? guiLabel, guiBox, guiButton, guiTextField, guiToggle, guiDrawTexture;
     private static PropertyInfo? eventCurrent, eventTypeProp, eventKeyCodeProp, eventMouseProp, eventButtonProp, timeScaleProp;
     private static MethodInfo? eventUseMethod;
-    private static PropertyInfo? guiColorProp, guiBackgroundColorProp, guiContentColorProp, guiSkinProp, whiteTextureProp;
+    private static PropertyInfo? guiColorProp, guiBackgroundColorProp, guiContentColorProp, guiSkinProp, whiteTextureProp, cursorVisibleProp;
     private static bool skinStyled;
     private static bool dumpedUnitShape;
     private static readonly HashSet<string> dumpedProviders = new();
@@ -577,6 +577,9 @@ internal static class ToolkitBridge
             DrawPanel();
 
             ConsumeMouseInput();
+            
+            // Force hardware cursor to hide when hovering our UI so only game's custom software cursor shows
+            HideHardwareCursorIfHovering();
         }
         catch (Exception e)
         {
@@ -597,6 +600,7 @@ internal static class ToolkitBridge
         colorType = FindType("UnityEngine.Color");
         texture2DType = FindType("UnityEngine.Texture2D");
         inputType = FindType("UnityEngine.Input");
+        cursorType = FindType("UnityEngine.Cursor");
         if (guiType == null || rectType == null || eventType == null) return false;
 
         guiLabel = FindGuiMethod("Label", 2, typeof(string));
@@ -618,6 +622,7 @@ internal static class ToolkitBridge
         guiColorProp = guiType.GetProperty("color", BindingFlags.Public | BindingFlags.Static);
         guiBackgroundColorProp = guiType.GetProperty("backgroundColor", BindingFlags.Public | BindingFlags.Static);
         guiContentColorProp = guiType.GetProperty("contentColor", BindingFlags.Public | BindingFlags.Static);
+        cursorVisibleProp = cursorType?.GetProperty("visible", BindingFlags.Public | BindingFlags.Static);
         guiSkinProp = guiType.GetProperty("skin", BindingFlags.Public | BindingFlags.Static);
         whiteTextureProp = texture2DType?.GetProperty("whiteTexture", BindingFlags.Public|BindingFlags.Static);
 
@@ -1821,6 +1826,18 @@ internal static class ToolkitBridge
             float sh=Convert.ToSingle(hp?.GetValue(null) ?? 720);
             windowX=Math.Max(10,(sw-w)/2f); windowY=Math.Max(10,(sh-h)/2f);
         } catch { windowX=120; windowY=80; }
+    }
+
+    private static void HideHardwareCursorIfHovering()
+    {
+        var ev=eventCurrent?.GetValue(null); if(ev==null) return;
+        var mp=eventMouseProp?.GetValue(ev); if(mp==null) return;
+        float mx=Convert.ToSingle(GetMember(mp,"x") ?? -1f);
+        float my=Convert.ToSingle(GetMember(mp,"y") ?? -1f);
+        if(mx>=windowX && mx<=windowX+windowW && my>=windowY && my<=windowY+windowH)
+        {
+            try { cursorVisibleProp?.SetValue(null, false); } catch {}
+        }
     }
 
     private static void HandleWindowDragAndResize()
