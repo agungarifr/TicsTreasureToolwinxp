@@ -721,9 +721,12 @@ internal static class ToolkitBridge
             tx+=tabW+6;
         }
 
-        FillRect(x+18,y+143,w-36,h-184,0.024f,0.030f,0.031f,0.995f);
-        FillRect(x+19,y+144,w-38,1,0.38f,0.31f,0.19f,1f);
-        SetBackground(0.07f,0.07f,0.06f);
+        FillRect(x+18,y+143,w-36,h-184,0.83f,0.81f,0.78f,1f); // Classic Gray
+        FillRect(x+18,y+143,w-36,1,0.5f,0.5f,0.5f,1f); // Inset shadow top
+        FillRect(x+18,y+143,1,h-184,0.5f,0.5f,0.5f,1f); // Inset shadow left
+        FillRect(x+18,y+143+h-185,w-36,1,1f,1f,1f,1f); // Inset highlight bottom
+        FillRect(x+18+w-37,y+143,1,h-184,1f,1f,1f,1f); // Inset highlight right
+        SetBackground(0.83f,0.81f,0.78f);
         Box(x+18,y+143,w-36,h-184,"");
 
         switch(tab)
@@ -765,7 +768,7 @@ internal static class ToolkitBridge
         }
 
         // TextBox inset
-        FillRect(x+194,y+190,310,34,1f,1f,1f,1f);
+        FillRect(x+194,y+190,310,34,0.95f,0.95f,0.95f,1f);
         FillRect(x+194,y+190,310,1,0.5f,0.5f,0.5f,1f);
         FillRect(x+194,y+190,1,34,0.5f,0.5f,0.5f,1f);
         Label(x+211,y+197,280,24,GetCharacterName(selectedCharacter));
@@ -1868,8 +1871,8 @@ internal static class ToolkitBridge
         if(colorType==null) return;
         try {
             object C(float r,float g,float b,float a=1f)=>Activator.CreateInstance(colorType!,new object[]{r,g,b,a})!;
-            guiColorProp?.SetValue(null,C(0f,0f,0f,1f)); // Classic text color
-            guiContentColorProp?.SetValue(null,C(0f,0f,0f,1f)); // Classic text color
+            guiColorProp?.SetValue(null,C(1f,1f,1f,1f)); // White overall tint so elements are visible
+            guiContentColorProp?.SetValue(null,C(0f,0f,0f,1f)); // Classic black text color
             guiBackgroundColorProp?.SetValue(null,C(0.83f,0.81f,0.78f,1f)); // Classic gray
         } catch {}
     }
